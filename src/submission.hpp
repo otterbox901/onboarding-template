@@ -1,84 +1,100 @@
 #pragma once
 #include <cstddef>
 #include <cstring>
-#include <new>
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include <cstdlib>
+#include <memory>
+
+
+template <std::size_t Alignement, typename T>
+static constexpr T* assume_aligned(T* ptr) noexcept {
+    return static_cast<T*>(__builtin_assume_aligned(ptr,Alignement));
+}
+
 
 class Grid {
 private:
     std::size_t rows_;
     std::size_t cols_;
+    std::size_t row_width_;
     double* data_;
 
+    static constexpr std::size_t align= 64;
+    static constexpr ::size_t elements_per_vec= 64/sizeof(double);
 public:
     Grid(std::size_t rows, std::size_t cols)
-        : rows_(rows), cols_(cols),
-          data_(static_cast<double*>(
-              ::operator new[](rows * cols * sizeof(double), std::align_val_t{64})))
-    {
-        #pragma omp parallel for schedule(static)
-        for (std::size_t r = 0; r < rows_; ++r) {
-            std::memset(data_ + r * cols_, 0, cols_ * sizeof(double));
-        }
-    }
+        : rows_(rows), cols_(cols) {
+        row_width_ = ((cols + elements_per_vec - 1) / elements_per_vec) * elements_per_vec;
+        std::size_t total_elements = rows_ * row_width_;
+        std::size_t total_bytes = total_elements * sizeof(double);
 
-    ~Grid() { ::operator delete[](data_, std::align_val_t{64}); }
+        void* ptr= std::aligned_alloc(align,total_bytes);
+        data_ = new (ptr) double[total_elements]();
+    };
+    
+    double& operator()(std::size_t i, std::size_t j) {
+        return data_[i*row_width_ + j];
+    }
+    double  operator()(std::size_t i, std::size_t j) const {
+        return data_[i*row_width_ + j];
+    }
+    [[nodiscard]] size_t row_size() const {return rows_;};
+    [[nodiscard]] size_t col_size() const {return cols_;};
+    [[nodiscard]] size_t row_width() const {return row_width_;};
+    /// access data
+    [[nodiscard]] double* data(){return assume_aligned<align>(data_);};
+    [[nodiscard]] const double* data() const {return assume_aligned<align>(data_);};
+
+    ~Grid() {
+        std::free(data_);
+    }
 
     Grid(const Grid&) = delete;
     Grid& operator=(const Grid&) = delete;
-
-    Grid(Grid&& o) noexcept : rows_(o.rows_), cols_(o.cols_), data_(o.data_) {
-        o.data_ = nullptr;
-    }
-    Grid& operator=(Grid&& o) noexcept {
-        if (this != &o) {
-            ::operator delete[](data_, std::align_val_t{64});
-            rows_ = o.rows_; cols_ = o.cols_; data_ = o.data_;
-            o.data_ = nullptr;
-        }
-        return *this;
-    }
-
-    inline double& operator()(std::size_t i, std::size_t j) { return data_[i * cols_ + j]; }
-    inline double  operator()(std::size_t i, std::size_t j) const { return data_[i * cols_ + j]; }
-
-    [[nodiscard]] double* data() noexcept { return data_; }
-    [[nodiscard]] const double* data() const noexcept { return data_; }
-    [[nodiscard]] std::size_t row_size() const { return rows_; }
-    [[nodiscard]] std::size_t col_size() const { return cols_; }
 };
 
-inline void apply_stencil(const Grid& old_grid, Grid& new_grid) {
-    const std::size_t rows = old_grid.row_size();
-    const std::size_t cols = old_grid.col_size();
 
-    const double* __restrict old_ptr = old_grid.data();
-    double* __restrict new_ptr = new_grid.data();
+/// stencil logic
+void copy_border(const Grid& old_grid, Grid& new_grid, const std::size_t& rows,
+                const std::size_t& cols, const std::size_t row_width)
+{
+    const double* __restrict src= old_grid.data();
+    double* __restrict dst= new_grid.data();
 
-    constexpr double c0 = 0.5;
-    constexpr double c1 = 0.125;
+    std::memcpy(dst, src, row_width*sizeof(double));
+    const std::size_t offset = row_width *(rows-1);
+    std::memcpy(dst+offset, src, offset*sizeof(double));
 
-    #pragma omp parallel for schedule(static)
-    for (std::size_t r = 1; r < rows - 1; ++r) {
-        const double* __restrict row      = old_ptr + r * cols;
-        const double* __restrict row_up   = row - cols;
-        const double* __restrict row_down = row + cols;
-        double* __restrict out            = new_ptr + r * cols;
+    for (std::size_t i = 0; i < rows-1; ++i) {
+        const std::size_t start= i*row_width;
+        dst[start]= src[start];
+        dst[start+cols-1]= src[start+cols-1];
 
-        #pragma omp simd
-        for (std::size_t c = 1; c < cols - 1; ++c) {
-            out[c] = c0 * row[c] + c1 * (row_up[c] + row_down[c] + row[c + 1] + row[c - 1]);
+    }
+
+
+}
+
+void apply_stencil(const Grid& old_grid, Grid& new_grid) {
+    const std::size_t rows= old_grid.row_size();
+    const std::size_t cols= old_grid.col_size();
+    const size_t row_width= old_grid.row_width();
+
+    const double* __restrict src= assume_aligned<64>(old_grid.data());
+    double* __restrict dst= assume_aligned<64>(new_grid.data());
+
+
+    for (size_t r = 1; r < rows-1; r++) {
+        const std::size_t curr_row = r*row_width;
+        const std::size_t prev_row = (r-1)*row_width;
+        const std::size_t next_row = (r+1)*row_width;
+
+        # pragma omp simd
+        for (size_t c = 1; c < cols-1; c++) {
+            dst[curr_row + c] = 0.5   * src[curr_row + c] +
+                               0.125 * (src[prev_row + c] + src[next_row + c] +
+                                        src[curr_row + (c + 1)] + src[curr_row + (c - 1)]);
         }
     }
-
-    std::memcpy(new_ptr, old_ptr, cols * sizeof(double));
-    std::memcpy(new_ptr + (rows - 1) * cols, old_ptr + (rows - 1) * cols, cols * sizeof(double));
-
-    #pragma omp parallel for schedule(static)
-    for (std::size_t r = 0; r < rows; ++r) {
-        new_ptr[r * cols] = old_ptr[r * cols];
-        new_ptr[r * cols + cols - 1] = old_ptr[r * cols + cols - 1];
-    }
+    /// border
+    copy_border(old_grid, new_grid,rows, cols, row_width);
 }
