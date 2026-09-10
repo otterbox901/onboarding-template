@@ -82,7 +82,7 @@ void apply_stencil(const Grid& old_grid, Grid& new_grid) {
     const double* __restrict src= assume_aligned<64>(old_grid.data());
     double* __restrict dst= assume_aligned<64>(new_grid.data());
 
-    #pragma omp parrellel for schedule(static)
+    #pragma omp parallel for schedule(static)
     for (size_t r = 1; r < rows-1; r++) {
         const std::size_t curr_row = r*row_width;
         const std::size_t prev_row = (r-1)*row_width;
