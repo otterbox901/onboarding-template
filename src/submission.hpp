@@ -62,7 +62,7 @@ void copy_border(const Grid& old_grid, Grid& new_grid, const std::size_t& rows,
 
     std::memcpy(dst, src, row_width*sizeof(double));
     const std::size_t offset = row_width *(rows-1);
-    std::memcpy(dst+offset, src, offset*sizeof(double));
+    std::memcpy(dst+offset, src+offset, row_width*sizeof(double));
 
     for (std::size_t i = 0; i < rows-1; ++i) {
         const std::size_t start= i*row_width;
