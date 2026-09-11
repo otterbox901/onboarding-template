@@ -107,7 +107,7 @@ void apply_stencil(const Grid& old_grid, Grid& new_grid) {
     for (size_t tr=1; tr<rows-1; tr+=tile_row) {
         for (size_t tc=1; tc<cols-1; tc+=tile_col) {
             size_t r_end= std::min(tr+tile_row, rows-1);
-            size_t c_end= std::min(tr+tile_col, rows-1);
+            size_t c_end= std::min(tc+tile_col, cols-1);
 
             /// going through each block
             for (size_t r= tr; r<r_end; ++r) {
@@ -116,7 +116,7 @@ void apply_stencil(const Grid& old_grid, Grid& new_grid) {
                 const double* __restrict src_next= src + ((r+1) * row_width);
 
                 double* __restrict dst_curr= dst+ (r*row_width);
-                #pragma omd simd
+                #pragma omp simd
                 for (size_t c= tc; c<c_end; ++c) {
                     dst_curr[c] = 0.5   * src_curr[c] +
                                       0.125 * (src_prev[c] + src_next[c] +
