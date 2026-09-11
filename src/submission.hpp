@@ -19,7 +19,7 @@ private:
     double* data_;
 
     static constexpr std::size_t align= 64;
-    static constexpr ::size_t elements_per_vec= 64/sizeof(double);
+    static constexpr std::size_t elements_per_vec= 64/sizeof(double);
 public:
     Grid(std::size_t rows, std::size_t cols)
         : rows_(rows), cols_(cols) {
@@ -83,18 +83,19 @@ void apply_stencil(const Grid& old_grid, Grid& new_grid) {
     double* __restrict dst= assume_aligned<64>(new_grid.data());
 
     #pragma omp parallel for schedule(static)
-    for (size_t r = 1; r < rows-1; r++) {
-        const std::size_t curr_row = r*row_width;
-        const std::size_t prev_row = (r-1)*row_width;
-        const std::size_t next_row = (r+1)*row_width;
+    for (size_t r = 1; r < rows - 1; r++) {
+    const double* __restrict src_curr = src + (r * row_width);
+    const double* __restrict src_prev = src + ((r - 1) * row_width);
+    const double* __restrict src_next = src + ((r + 1) * row_width);
+    double* __restrict dst_curr       = dst + (r * row_width);
 
-        # pragma omp simd
-        for (size_t c = 1; c < cols-1; c++) {
-            dst[curr_row + c] = 0.5   * src[curr_row + c] +
-                               0.125 * (src[prev_row + c] + src[next_row + c] +
-                                        src[curr_row + (c + 1)] + src[curr_row + (c - 1)]);
-        }
+    #pragma omp simd
+    for (size_t c = 1; c < cols - 1; c++) {
+        dst_curr[c] = 0.5   * src_curr[c] +
+                      0.125 * (src_prev[c] + src_next[c] +
+                               src_curr[c + 1] + src_curr[c - 1]);
     }
+}
     /// border
     copy_border(old_grid, new_grid,rows, cols, row_width);
 }
