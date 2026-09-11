@@ -107,16 +107,16 @@ void apply_stencil(const Grid& old_grid, Grid& new_grid) {
     for (size_t tr=1; tr<rows-1; tr+=tile_row) {
         for (size_t tc=1; tc<cols-1; tc+=tile_col) {
             size_t r_end= std::min(tr+tile_row, rows-1);
-            size_t c_end= std::max(tr+tile_row, rows-1);
-            
+            size_t c_end= std::min(tr+tile_col, rows-1);
+
             /// going through each block
             for (size_t r= tr; r<r_end; ++r) {
                 const double* __restrict src_curr= src+ (r*row_width);
-                const double* __restrict src_prev= src_curr + ((r-1) * row_width);
-                const double* __restrict src_next= src_curr + ((r+1) * row_width);
+                const double* __restrict src_prev= src + ((r-1) * row_width);
+                const double* __restrict src_next= src + ((r+1) * row_width);
 
                 double* __restrict dst_curr= dst+ (r*row_width);
-                #pragma omp parallel for schedule(static)
+                #pragma omd simd
                 for (size_t c= tc; c<c_end; ++c) {
                     dst_curr[c] = 0.5   * src_curr[c] +
                                       0.125 * (src_prev[c] + src_next[c] +
