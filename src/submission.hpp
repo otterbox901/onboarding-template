@@ -11,7 +11,8 @@ static constexpr T* assume_aligned(T* ptr) noexcept {
 }
 
 
-class Grid {
+class Grid 
+{
 private:
     std::size_t rows_;
     std::size_t cols_;
@@ -69,10 +70,14 @@ void copy_border(const Grid& old_grid, Grid& new_grid, const std::size_t& rows,
 }
 */
 
-void apply_stencil(const Grid& old_grid, Grid& new_grid) {
+void apply_stencil(const Grid& old_grid, Grid& new_grid) 
+{ 
+    
     const std::size_t rows= old_grid.row_size();
     const std::size_t cols= old_grid.col_size();
     const size_t row_width= old_grid.row_width();
+    
+    copy_border(old_grid, new_grid,rows, cols, row_width);
 
     const double* __restrict src= assume_aligned<64>(old_grid.data());
     double* __restrict dst= assume_aligned<64>(new_grid.data());
@@ -91,6 +96,6 @@ void apply_stencil(const Grid& old_grid, Grid& new_grid) {
                                src_curr[c + 1] + src_curr[c - 1]);
     }
 }
-    /// border
-    copy_border(old_grid, new_grid,rows, cols, row_width);
+    /// border was
+   
 }
