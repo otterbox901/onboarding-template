@@ -87,6 +87,6 @@ void apply_stencil(const Grid& old_grid, Grid& new_grid) {
                                src_curr[c + 1] + src_curr[c - 1]);
     }
 }
-    /// borders
+    /// border
     copy_border(old_grid, new_grid,rows, cols, row_width);
 }
