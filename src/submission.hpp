@@ -46,7 +46,11 @@ public:
 };
 
 void copy_border(const Grid& old_grid, Grid& new_grid, const std::size_t& rows,
-                const std::size_t& cols, const std::size_t row_width)
+                        const std::size_t& cols, const std::size_t row_width) {
+
+    std::memcpy(new_grid.data(), old_grid.data(), rows*row_width*sizeof(double));
+}
+/*
 {
     const double* __restrict src= old_grid.data();
     double* __restrict dst= new_grid.data();
@@ -62,8 +66,8 @@ void copy_border(const Grid& old_grid, Grid& new_grid, const std::size_t& rows,
 
     }
 
-
 }
+*/
 
 void apply_stencil(const Grid& old_grid, Grid& new_grid) {
     const std::size_t rows= old_grid.row_size();
