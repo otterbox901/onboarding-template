@@ -4,7 +4,6 @@
 #include <cstdlib>
 #include <memory>
 
-
 template <std::size_t Alignement, typename T>
 static constexpr T* assume_aligned(T* ptr) noexcept {
     return static_cast<T*>(__builtin_assume_aligned(ptr,Alignement));
@@ -18,12 +17,16 @@ private:
     std::size_t row_width_;
     double* data_;
 
-    static constexpr std::size_t align= 64;
-    static constexpr ::size_t elements_per_vec= 64/sizeof(double);
+    static constexpr std::size_t align= 4096;
+    static constexpr ::size_t elements_per_vec= 4096/sizeof(double);
 public:
     Grid(std::size_t rows, std::size_t cols)
         : rows_(rows), cols_(cols) {
         row_width_ = ((cols + elements_per_vec - 1) / elements_per_vec) * elements_per_vec;
+        /// test
+        const int is_multiple_of_1024= !(row_width_ % 1024);
+        row_width_ += is_multiple_of_1024*elements_per_vec;
+
         std::size_t total_elements = rows_ * row_width_;
         std::size_t total_bytes = total_elements * sizeof(double);
 
@@ -73,7 +76,7 @@ void apply_stencil(const Grid& old_grid, Grid& new_grid) {
     const double* __restrict src= assume_aligned<64>(old_grid.data());
     double* __restrict dst= assume_aligned<64>(new_grid.data());
 
-    #pragma omp parallel for schedule(static)
+    #pragma omp parallel for schedule(static) proc_bind(close)
     for (size_t r = 1; r < rows - 1; r++) {
     const double* __restrict src_curr = src + (r * row_width);
     const double* __restrict src_prev = src + ((r - 1) * row_width);
