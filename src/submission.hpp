@@ -17,15 +17,12 @@ private:
     std::size_t row_width_;
     double* data_;
 
-    static constexpr std::size_t align= 4096;
-    static constexpr ::size_t elements_per_vec= 4096/sizeof(double);
+    static constexpr std::size_t align= 64;
+    static constexpr ::size_t elements_per_vec= 64/sizeof(double);
 public:
     Grid(std::size_t rows, std::size_t cols)
         : rows_(rows), cols_(cols) {
         row_width_ = ((cols + elements_per_vec - 1) / elements_per_vec) * elements_per_vec;
-        /// test
-        const int is_multiple_of_1024= !(row_width_ % 1024);
-        row_width_ += is_multiple_of_1024*elements_per_vec;
 
         std::size_t total_elements = rows_ * row_width_;
         std::size_t total_bytes = total_elements * sizeof(double);
