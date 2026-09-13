@@ -15,10 +15,11 @@ private:
     std::size_t rows_;
     std::size_t cols_;
     std::size_t row_width_;
+
     double* data_;
 
     static constexpr std::size_t align= 64;
-    static constexpr ::size_t elements_per_vec= 64/sizeof(double);
+    static constexpr std::size_t elements_per_vec= 64/sizeof(double);
 public:
     Grid(std::size_t rows, std::size_t cols)
         : rows_(rows), cols_(cols) {
@@ -28,7 +29,7 @@ public:
         std::size_t total_bytes = total_elements * sizeof(double);
 
         void* ptr= std::aligned_alloc(align,total_bytes);
-        data_ = new (ptr) double[total_elements]();
+        data_= static_cast<double*>(ptr);
     };
 
     double& operator()(std::size_t i, std::size_t j) {
@@ -42,7 +43,12 @@ public:
     [[nodiscard]] size_t row_width() const {return row_width_;};
     /// access data
     [[nodiscard]] double* data(){return assume_aligned<align>(data_);};
-    [[nodiscard]] const double* data() const {return assume_aligned<align>(data_);};
+    [[nodiscard]] const double* data() const {return assume_aligned<align>(data_);}
+
+    /// destruct
+    ~Grid() {std::free(data_);}
+    Grid(const Grid&) = delete;
+    Grid& operator=(const Grid&) = delete;
 };
 
 void copy_border(const Grid& old_grid, Grid& new_grid, const std::size_t& rows,
@@ -55,6 +61,7 @@ void copy_border(const Grid& old_grid, Grid& new_grid, const std::size_t& rows,
     const std::size_t offset = row_width *(rows-1);
     std::memcpy(dst+offset, src+offset, row_width*sizeof(double));
 
+    #pragma omp simd
     for (std::size_t i = 0; i < rows-1; ++i) {
         const std::size_t start= i*row_width;
         dst[start]= src[start];
@@ -74,13 +81,14 @@ void apply_stencil(const Grid& old_grid, Grid& new_grid) {
     double* __restrict dst= assume_aligned<64>(new_grid.data());
 
     #pragma omp parallel for schedule(static) proc_bind(close)
+
     for (size_t r = 1; r < rows - 1; r++) {
     const double* __restrict src_curr = src + (r * row_width);
     const double* __restrict src_prev = src + ((r - 1) * row_width);
     const double* __restrict src_next = src + ((r + 1) * row_width);
     double* __restrict dst_curr       = dst + (r * row_width);
 
-    #pragma omp simd
+    #pragma omp simd aligned(src_curr, src_prev, src_next,dst_curr:64)
     for (size_t c = 1; c < cols - 1; c++) {
         dst_curr[c] = 0.5   * src_curr[c] +
                       0.125 * (src_prev[c] + src_next[c] +
